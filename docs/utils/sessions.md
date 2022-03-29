@@ -13,7 +13,7 @@ Remix comes with several pre-built session storage options for common scenarios,
 - `createCookieSessionStorage`
 - `createMemorySessionStorage`
 - `createFileSessionStorage` (node)
-- `createCloudflareKVSessionStorage` (cloudflare-workers)
+- `createWorkersKVSessionStorage` (Cloudflare Workers)
 - `createArcTableSessionStorage` (architect, Amazon DynamoDB)
 - custom storage with `createSessionStorage`
 
@@ -328,9 +328,9 @@ const { getSession, commitSession, destroySession } =
 export { getSession, commitSession, destroySession };
 ```
 
-## `createCloudflareKVSessionStorage` (cloudflare-workers)
+## `createWorkersKVSessionStorage` (Cloudflare Workers)
 
-For [Cloudflare KV][cloudflare-kv] backed sessions, use `createCloudflareKVSessionStorage()`.
+For [Cloudflare Workers KV][cloudflare-kv] backed sessions, use `createWorkersKVSessionStorage()`.
 
 The advantage of KV backed sessions is that only the session ID is stored in the cookie while the rest of the data is stored in a globally replicated, low-latency data store with exceptionally high read volumes with low-latency.
 
@@ -338,7 +338,7 @@ The advantage of KV backed sessions is that only the session ID is stored in the
 // app/sessions.server.js
 import {
   createCookie,
-  createCloudflareKVSessionStorage,
+  createWorkersKVSessionStorage,
 } from "@remix-run/cloudflare";
 
 // In this example the Cookie is created separately.
@@ -348,7 +348,7 @@ const sessionCookie = createCookie("__session", {
 });
 
 const { getSession, commitSession, destroySession } =
-  createCloudflareKVSessionStorage({
+  createWorkersKVSessionStorage({
     // The KV Namespace where you want to store sessions
     kv: YOUR_NAMESPACE,
     cookie: sessionCookie,
