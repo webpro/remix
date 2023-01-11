@@ -9,6 +9,9 @@ export interface RemixContextObject {
   routeModules: RouteModules;
   serverHandoffString?: string;
   future: FutureConfig;
+  dev?: {
+    liveReloadPort: number;
+  };
 }
 
 // Additional React-Router information needed at runtime, but not hydrated
