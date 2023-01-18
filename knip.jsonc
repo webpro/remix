@@ -1,0 +1,74 @@
+{
+  "$schema": "https://unpkg.com/knip@1/schema.json",
+
+  "ignore": ["**/*.d.ts", "**/fixtures", "**/*-template"],
+
+  "ignoreWorkspaces": [
+    // Import paths ending with a '.ts' extension are not supported yet (on the TypeScript v5 roadmap)
+    "packages/remix-deno"
+  ],
+
+  "ignoreDependencies": ["eslint-plugin-markdown"],
+
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.{js,mjs}", "scripts/playground/new.js"],
+      "project": ["scripts/*.{js,mjs}", "scripts/playground/new.js"],
+      "eslint": false,
+      "playwright": {
+        "config": "integration/playwright.config.ts",
+        "entry": "integration/**/*-test.ts",
+        "project": "integration/**/*.ts"
+      }
+    },
+
+    // Since Remix has a pretty consistent structure, most workspaces can use this default configuration
+    "packages/*": {
+      "entry": "{index,cli}.{ts,tsx}",
+      "project": "**/*.{ts,tsx}"
+    },
+
+    // When using the root .eslintrc.js instead of internal.js, all eslint plugins would be missing in the root
+    // package.json (since internal.js is in a separate workspace). So the eslint plugin is disabled in the root
+    // workspace, and the remaining `eslint-plugins-markdown` is ignored. Maybe when moving all eslint config to this
+    // workspace this workaround would not be necessary.
+    "packages/remix-eslint-config": {
+      "eslint": "internal.js"
+    },
+
+    "packages/remix-dev": {
+      "entry": [
+        "cli.ts",
+        "server-build.ts",
+        "cli/migrate/migrations/transforms.ts"
+      ],
+      "project": "**/*.ts",
+      "ignore": ["**/fixtures/**"]
+    },
+
+    // The "workspaces" below are not defined as such in the root package.json, but Knip is happy to analyze 'em as well
+
+    "integration/helpers/*": {},
+
+    "scripts/deployment-test": {
+      "entry": ["*.mjs"],
+      "cypress": {
+        "entry": [
+          "cypress/support/index.{js,ts}",
+          "cypress/e2e/**/*.{js,jsx,ts,tsx}"
+        ]
+      }
+    },
+
+    "scripts/release": {
+      "entry": ["comment.ts"],
+      "project": ["**/*.ts"]
+    },
+
+    // Knip has a Remix plugin and they get along nicely here
+    "scripts/playground/template": {
+      "entry": ["prisma/seed.ts", "tailwind.config.js"],
+      "project": "**/*.{js,jsx,ts,tsx}"
+    }
+  }
+}
