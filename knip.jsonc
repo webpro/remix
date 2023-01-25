@@ -12,14 +12,19 @@
 
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.{js,mjs}", "scripts/playground/new.js"],
-      "project": ["scripts/*.{js,mjs}", "scripts/playground/new.js"],
+      "entry": [],
+      "project": ["scripts/**/*.{js,mjs}"],
       "eslint": false,
       "playwright": {
         "config": "integration/playwright.config.ts",
         "entry": "integration/**/*-test.ts",
         "project": "integration/**/*.ts"
-      }
+      },
+      "github-actions": [
+        ".github/workflows/*.yml",
+        "!.github/workflows/release-comments.yml",
+        "!.github/workflows/deployments.yml"
+      ]
     },
 
     // Since Remix has a pretty consistent structure, most workspaces can use this default configuration
@@ -51,18 +56,17 @@
     "integration/helpers/*": {},
 
     "scripts/deployment-test": {
-      "entry": ["*.mjs"],
       "cypress": {
         "entry": [
           "cypress/support/index.{js,ts}",
           "cypress/e2e/**/*.{js,jsx,ts,tsx}"
         ]
-      }
+      },
+      "github-actions": "../../.github/workflows/deployments.yml"
     },
 
     "scripts/release": {
-      "entry": ["comment.ts"],
-      "project": ["**/*.ts"]
+      "github-actions": "../../.github/workflows/release-comments.yml"
     },
 
     // Knip has a Remix plugin and they get along nicely here
