@@ -1,61 +1,59 @@
 {
-  "$schema": "https://unpkg.com/knip@1/schema.json",
+  "$schema": "https://unpkg.com/knip@2/schema.json",
 
-  "ignore": ["**/*.d.ts", "**/fixtures", "**/*-template"],
-
-  "ignoreWorkspaces": [
-    // Import paths ending with a '.ts' extension are not supported yet (on the TypeScript v5 roadmap)
-    "packages/remix-deno"
-  ],
-
-  "ignoreDependencies": ["eslint-plugin-markdown"],
+  "ignore": ["**/*.d.ts"],
 
   "workspaces": {
     ".": {
-      "entry": [],
-      "project": ["scripts/**/*.{js,mjs}"],
+      "ignore": [".eslintrc.js"],
+      "ignoreDependencies": ["eslint-plugin-markdown"],
       "eslint": false,
-      "playwright": {
-        "config": "integration/playwright.config.ts",
-        "entry": "integration/**/*-test.ts",
-        "project": "integration/**/*.ts"
-      },
       "github-actions": [
         ".github/workflows/*.yml",
-        "!.github/workflows/release-comments.yml",
-        "!.github/workflows/deployments.yml"
-      ]
+        "!.github/workflows/deployments.yml" // In scripts/deployment-test
+      ],
+      "playwright": {
+        "config": "integration/playwright.config.ts",
+        "entry": "integration/*-test.ts",
+        "project": "integration/**/*.ts"
+      }
     },
 
-    // Since Remix has a pretty consistent structure, most workspaces can use this default configuration
-    "packages/*": {
-      "entry": "{index,cli}.{ts,tsx}",
-      "project": "**/*.{ts,tsx}"
+    "packages/create-remix": {
+      "entry": "cli.ts",
+      "ignore": ".eslintrc.js"
     },
 
-    // When using the root .eslintrc.js instead of internal.js, all eslint plugins would be missing in the root
-    // package.json (since internal.js is in a separate workspace). So the eslint plugin is disabled in the root
-    // workspace, and the remaining `eslint-plugins-markdown` is ignored. Maybe when moving all eslint config to this
-    // workspace this workaround would not be necessary.
-    "packages/remix-eslint-config": {
-      "eslint": "internal.js"
+    "packages/remix-serve": {
+      "entry": "cli.ts",
+      "ignore": ".eslintrc.js"
+    },
+
+    "packages/remix-server-runtime": {
+      "ignore": ".eslintrc.js"
     },
 
     "packages/remix-dev": {
-      "entry": [
-        "cli.ts",
-        "server-build.ts",
-        "cli/migrate/migrations/transforms.ts"
-      ],
-      "project": "**/*.ts",
-      "ignore": ["**/fixtures/**"]
+      "entry": ["cli.ts", "server-build.ts"],
+      "ignore": ["modules.ts", "**/fixtures/**"],
+      "ignoreDependencies": ["express"] // Knip does not understand tryImport("express")
+    },
+
+    "packages/remix-eslint-config": {
+      "eslint": ["internal.js", "node.js", "jest.js", "jest-testing-library.js"]
     },
 
     // The "workspaces" below are not defined as such in the root package.json, but Knip is happy to analyze 'em as well
+    // By making this explicit they also stay out of the way of the other workspaces.
 
     "integration/helpers/*": {},
 
+    "templates/*": {
+      "ignoreBinaries": ["arc", "deployctl", "fly", "netlify"]
+    },
+
     "scripts/deployment-test": {
+      "ignore": "cypress/.eslintrc.js",
       "cypress": {
         "entry": [
           "cypress/support/index.{js,ts}",
@@ -65,14 +63,9 @@
       "github-actions": "../../.github/workflows/deployments.yml"
     },
 
-    "scripts/release": {
-      "github-actions": "../../.github/workflows/release-comments.yml"
-    },
-
     // Knip has a Remix plugin and they get along nicely here
     "scripts/playground/template": {
-      "entry": ["prisma/seed.ts", "tailwind.config.js"],
-      "project": "**/*.{js,jsx,ts,tsx}"
+      "entry": ["prisma/seed.ts"]
     }
   }
 }
