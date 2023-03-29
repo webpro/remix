@@ -9,7 +9,14 @@ import { redirect } from "react-router-dom";
 
 import type { RouteModules } from "./routeModules";
 import { loadRouteModule } from "./routeModules";
-import { fetchData, isCatchResponse, isRedirectResponse } from "./data";
+import {
+  fetchData,
+  isCatchResponse,
+  isDeferredResponse,
+  isRedirectResponse,
+  parseDeferredReadableStream,
+} from "./data";
+import type { FutureConfig } from "./entry";
 import { prefetchStyleLinks } from "./links";
 import invariant from "./invariant";
 import { RemixRoute, RemixRouteError } from "./components";
@@ -38,67 +45,108 @@ export interface EntryRoute extends Route {
   parentId?: string;
 }
 
+// Create a map of routes by parentId to use recursively instead of
+// repeatedly filtering the manifest.
+function groupRoutesByParentId(manifest: RouteManifest<EntryRoute>) {
+  let routes: Record<string, Omit<EntryRoute, "children">[]> = {};
+
+  Object.values(manifest).forEach((route) => {
+    let parentId = route.parentId || "";
+    if (!routes[parentId]) {
+      routes[parentId] = [];
+    }
+    routes[parentId].push(route);
+  });
+
+  return routes;
+}
+
 export function createServerRoutes(
   manifest: RouteManifest<EntryRoute>,
   routeModules: RouteModules,
-  parentId?: string
+  future: FutureConfig,
+  parentId: string = "",
+  routesByParentId: Record<
+    string,
+    Omit<EntryRoute, "children">[]
+  > = groupRoutesByParentId(manifest)
 ): DataRouteObject[] {
-  return Object.values(manifest)
-    .filter((route) => route.parentId === parentId)
-    .map((route) => {
-      let hasErrorBoundary =
-        route.id === "root" || route.hasErrorBoundary || route.hasCatchBoundary;
-      let dataRoute: DataRouteObject = {
-        caseSensitive: route.caseSensitive,
-        element: <RemixRoute id={route.id} />,
-        errorElement: hasErrorBoundary ? (
-          <RemixRouteError id={route.id} />
-        ) : undefined,
-        id: route.id,
-        index: route.index,
-        path: route.path,
-        handle: routeModules[route.id].handle,
-        // Note: we don't need loader/action/shouldRevalidate on these routes
-        // since they're for a static render
-      };
+  return (routesByParentId[parentId] || []).map((route) => {
+    let hasErrorBoundary =
+      future.v2_errorBoundary === true
+        ? route.id === "root" || route.hasErrorBoundary
+        : route.id === "root" ||
+          route.hasCatchBoundary ||
+          route.hasErrorBoundary;
+    let dataRoute: DataRouteObject = {
+      caseSensitive: route.caseSensitive,
+      element: <RemixRoute id={route.id} />,
+      errorElement: hasErrorBoundary ? (
+        <RemixRouteError id={route.id} />
+      ) : undefined,
+      id: route.id,
+      index: route.index,
+      path: route.path,
+      handle: routeModules[route.id].handle,
+      // Note: we don't need loader/action/shouldRevalidate on these routes
+      // since they're for a static render
+    };
 
-      let children = createServerRoutes(manifest, routeModules, route.id);
-      if (children.length > 0) dataRoute.children = children;
-      return dataRoute;
-    });
+    let children = createServerRoutes(
+      manifest,
+      routeModules,
+      future,
+      route.id,
+      routesByParentId
+    );
+    if (children.length > 0) dataRoute.children = children;
+    return dataRoute;
+  });
 }
 
 export function createClientRoutes(
   manifest: RouteManifest<EntryRoute>,
   routeModulesCache: RouteModules,
-  parentId?: string
+  future: FutureConfig,
+  parentId: string = "",
+  routesByParentId: Record<
+    string,
+    Omit<EntryRoute, "children">[]
+  > = groupRoutesByParentId(manifest)
 ): DataRouteObject[] {
-  return Object.values(manifest)
-    .filter((entryRoute) => entryRoute.parentId === parentId)
-    .map((route) => {
-      let hasErrorBoundary =
-        route.id === "root" || route.hasErrorBoundary || route.hasCatchBoundary;
+  return (routesByParentId[parentId] || []).map((route) => {
+    let hasErrorBoundary =
+      future.v2_errorBoundary === true
+        ? route.id === "root" || route.hasErrorBoundary
+        : route.id === "root" ||
+          route.hasCatchBoundary ||
+          route.hasErrorBoundary;
 
-      let dataRoute: DataRouteObject = {
-        caseSensitive: route.caseSensitive,
-        element: <RemixRoute id={route.id} />,
-        errorElement: hasErrorBoundary ? (
-          <RemixRouteError id={route.id} />
-        ) : undefined,
-        id: route.id,
-        index: route.index,
-        path: route.path,
-        // handle gets added in via useMatches since we aren't guaranteed to
-        // have the route module available here
-        handle: undefined,
-        loader: createDataFunction(route, routeModulesCache, false),
-        action: createDataFunction(route, routeModulesCache, true),
-        shouldRevalidate: createShouldRevalidate(route, routeModulesCache),
-      };
-      let children = createClientRoutes(manifest, routeModulesCache, route.id);
-      if (children.length > 0) dataRoute.children = children;
-      return dataRoute;
-    });
+    let dataRoute: DataRouteObject = {
+      caseSensitive: route.caseSensitive,
+      element: <RemixRoute id={route.id} />,
+      errorElement: hasErrorBoundary ? (
+        <RemixRouteError id={route.id} />
+      ) : undefined,
+      id: route.id,
+      index: route.index,
+      path: route.path,
+      // handle gets added in via useMatches since we aren't guaranteed to
+      // have the route module available here
+      handle: undefined,
+      loader: createDataFunction(route, routeModulesCache, false),
+      action: createDataFunction(route, routeModulesCache, true),
+      shouldRevalidate: createShouldRevalidate(route, routeModulesCache),
+    };
+    let children = createClientRoutes(
+      manifest,
+      routeModulesCache,
+      future,
+      route.id
+    );
+    if (children.length > 0) dataRoute.children = children;
+    return dataRoute;
+  });
 }
 
 function createShouldRevalidate(
@@ -157,6 +205,10 @@ function createDataFunction(
 
       if (isCatchResponse(result)) {
         throw result;
+      }
+
+      if (isDeferredResponse(result) && result.body) {
+        return await parseDeferredReadableStream(result.body);
       }
 
       return result;

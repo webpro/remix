@@ -6,8 +6,10 @@ import type {
 import * as React from "react";
 import type {
   AgnosticDataRouteMatch,
+  UNSAFE_DeferredData as DeferredData,
   ErrorResponse,
   Navigation,
+  TrackedPromise,
 } from "@remix-run/router";
 import type {
   LinkProps,
@@ -20,12 +22,14 @@ import type {
   SubmitFunction,
 } from "react-router-dom";
 import {
+  Await as AwaitRR,
   Link as RouterLink,
   NavLink as RouterNavLink,
   UNSAFE_DataRouterContext as DataRouterContext,
   UNSAFE_DataRouterStateContext as DataRouterStateContext,
   isRouteErrorResponse,
   matchRoutes,
+  useAsyncError,
   useFetcher as useFetcherRR,
   useFetchers as useFetchersRR,
   useActionData as useActionDataRR,
@@ -42,9 +46,9 @@ import type { AppData } from "./data";
 import type { EntryContext, RemixContextObject } from "./entry";
 import {
   RemixRootDefaultErrorBoundary,
-  RemixErrorBoundary,
   RemixRootDefaultCatchBoundary,
   RemixCatchBoundary,
+  V2_RemixRootDefaultErrorBoundary,
 } from "./errorBoundaries";
 import invariant from "./invariant";
 import {
@@ -56,7 +60,7 @@ import {
   isPageLinkDescriptor,
 } from "./links";
 import type { HtmlLinkDescriptor, PrefetchPageDescriptor } from "./links";
-import { createHtml } from "./markup";
+import { createHtml, escapeHtml } from "./markup";
 import type {
   RouteMatchWithMeta,
   V1_HtmlMetaDescriptor,
@@ -71,6 +75,7 @@ import type {
   TransitionStates,
 } from "./transition";
 import { IDLE_TRANSITION, IDLE_FETCHER } from "./transition";
+import { warnOnce } from "./warnings";
 
 function useDataRouterContext() {
   let context = React.useContext(DataRouterContext);
@@ -141,7 +146,7 @@ export function RemixRoute({ id }: { id: string }) {
 }
 
 export function RemixRouteError({ id }: { id: string }) {
-  let { routeModules } = useRemixContext();
+  let { future, routeModules } = useRemixContext();
 
   // This checks prevent cryptic error messages such as: 'Cannot read properties of undefined (reading 'root')'
   invariant(
@@ -151,17 +156,20 @@ export function RemixRouteError({ id }: { id: string }) {
   );
 
   let error = useRouteError();
-  let location = useLocation();
   let { CatchBoundary, ErrorBoundary } = routeModules[id];
 
-  // POC for potential v2 error boundary handling
-  // if (future.v2_errorBoundary) {
-  //   // Provide defaults for the root route if they are not present
-  //   if (id === "root") {
-  //     ErrorBoundary ||= RemixRootDefaultNewErrorBoundary;
-  //   }
-  //   return <ErrorBoundary />
-  // }
+  if (future.v2_errorBoundary) {
+    // Provide defaults for the root route if they are not present
+    if (id === "root") {
+      ErrorBoundary ||= V2_RemixRootDefaultErrorBoundary;
+    }
+    if (ErrorBoundary) {
+      // TODO: Unsure if we can satisfy the typings here
+      // @ts-expect-error
+      return <ErrorBoundary />;
+    }
+    throw error;
+  }
 
   // Provide defaults for the root route if they are not present
   if (id === "root") {
@@ -177,13 +185,7 @@ export function RemixRouteError({ id }: { id: string }) {
       ErrorBoundary
     ) {
       // Internal framework-thrown ErrorResponses
-      return (
-        <RemixErrorBoundary
-          location={location}
-          component={ErrorBoundary!}
-          error={tError.error}
-        />
-      );
+      return <ErrorBoundary error={tError.error} />;
     }
     if (CatchBoundary) {
       // User-thrown ErrorResponses
@@ -198,13 +200,7 @@ export function RemixRouteError({ id }: { id: string }) {
 
   if (error instanceof Error && ErrorBoundary) {
     // User- or framework-thrown Errors
-    return (
-      <RemixErrorBoundary
-        location={location}
-        component={ErrorBoundary}
-        error={error as Error}
-      />
-    );
+    return <ErrorBoundary error={error} />;
   }
 
   throw error;
@@ -288,6 +284,8 @@ function usePrefetchBehavior(
   ];
 }
 
+const ABSOLUTE_URL_REGEX = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+
 /**
  * A special kind of `<Link>` that knows whether or not it is "active".
  *
@@ -295,6 +293,8 @@ function usePrefetchBehavior(
  */
 let NavLink = React.forwardRef<HTMLAnchorElement, RemixNavLinkProps>(
   ({ to, prefetch = "none", ...props }, forwardedRef) => {
+    let isAbsolute = typeof to === "string" && ABSOLUTE_URL_REGEX.test(to);
+
     let href = useHref(to);
     let [shouldPrefetch, prefetchHandlers] = usePrefetchBehavior(
       prefetch,
@@ -308,13 +308,16 @@ let NavLink = React.forwardRef<HTMLAnchorElement, RemixNavLinkProps>(
           {...props}
           {...prefetchHandlers}
         />
-        {shouldPrefetch ? <PrefetchPageLinks page={href} /> : null}
+        {shouldPrefetch && !isAbsolute ? (
+          <PrefetchPageLinks page={href} />
+        ) : null}
       </>
     );
   }
 );
 NavLink.displayName = "NavLink";
 export { NavLink };
+
 /**
  * This component renders an anchor tag and is the primary way the user will
  * navigate around your website.
@@ -323,11 +326,14 @@ export { NavLink };
  */
 let Link = React.forwardRef<HTMLAnchorElement, RemixLinkProps>(
   ({ to, prefetch = "none", ...props }, forwardedRef) => {
+    let isAbsolute = typeof to === "string" && ABSOLUTE_URL_REGEX.test(to);
+
     let href = useHref(to);
     let [shouldPrefetch, prefetchHandlers] = usePrefetchBehavior(
       prefetch,
       props
     );
+
     return (
       <>
         <RouterLink
@@ -336,7 +342,9 @@ let Link = React.forwardRef<HTMLAnchorElement, RemixLinkProps>(
           {...props}
           {...prefetchHandlers}
         />
-        {shouldPrefetch ? <PrefetchPageLinks page={href} /> : null}
+        {shouldPrefetch && !isAbsolute ? (
+          <PrefetchPageLinks page={href} />
+        ) : null}
       </>
     );
   }
@@ -647,6 +655,7 @@ function V2Meta() {
   let location = useLocation();
 
   let meta: V2_HtmlMetaDescriptor[] = [];
+  let leafMeta: V2_HtmlMetaDescriptor[] | null = null;
   let parentsData: { [routeId: string]: AppData } = {};
 
   let matchesWithMeta: RouteMatchWithMeta[] = matches.map((match) => ({
@@ -677,6 +686,11 @@ function V2Meta() {
               matches: matchesWithMeta,
             })
           : routeModule.meta;
+    } else if (leafMeta) {
+      // We only assign the route's meta to the nearest leaf if there is no meta
+      // export in the route. The meta function may return a falsey value which
+      // is effectively the same as an empty array.
+      routeMeta = leafMeta;
     }
 
     routeMeta = routeMeta || [];
@@ -695,6 +709,7 @@ function V2Meta() {
     matchesWithMeta[index].meta = routeMeta;
     meta = routeMeta;
     parentsData[routeId] = data;
+    leafMeta = meta;
   }
 
   return (
@@ -729,6 +744,16 @@ export function Meta() {
   return future?.v2_meta ? <V2Meta /> : <V1Meta />;
 }
 
+export interface AwaitProps<Resolve> {
+  children: React.ReactNode | ((value: Awaited<Resolve>) => React.ReactNode);
+  errorElement?: React.ReactNode;
+  resolve: Resolve;
+}
+
+export function Await<Resolve>(props: AwaitProps<Resolve>) {
+  return <AwaitRR {...props} />;
+}
+
 /**
  * Tracks whether Remix has finished hydrating or not, so scripts can be skipped
  * during client-side updates.
@@ -758,8 +783,8 @@ export type ScriptProps = Omit<
  * @see https://remix.run/components/scripts
  */
 export function Scripts(props: ScriptProps) {
-  let { manifest, serverHandoffString } = useRemixContext();
-  let { router } = useDataRouterContext();
+  let { manifest, serverHandoffString, abortDelay } = useRemixContext();
+  let { router, static: isStatic, staticContext } = useDataRouterContext();
   let { matches } = useDataRouterStateContext();
   let navigation = useNavigation();
 
@@ -767,23 +792,137 @@ export function Scripts(props: ScriptProps) {
     isHydrated = true;
   }, []);
 
+  let deferredScripts: any[] = [];
   let initialScripts = React.useMemo(() => {
-    let contextScript = serverHandoffString
+    let contextScript = staticContext
       ? `window.__remixContext = ${serverHandoffString};`
-      : "";
+      : " ";
 
-    let routeModulesScript = `${matches
-      .map(
-        (match, index) =>
-          `import ${JSON.stringify(manifest.url)};
-import * as route${index} from ${JSON.stringify(
-            manifest.routes[match.route.id].module
-          )};`
-      )
-      .join("\n")}
+    let activeDeferreds = staticContext?.activeDeferreds;
+    // This sets up the __remixContext with utility functions used by the
+    // deferred scripts.
+    // - __remixContext.p is a function that takes a resolved value or error and returns a promise.
+    //   This is used for transmitting pre-resolved promises from the server to the client.
+    // - __remixContext.n is a function that takes a routeID and key to returns a promise for later
+    //   resolution by the subsequently streamed chunks.
+    // - __remixContext.r is a function that takes a routeID, key and value or error and resolves
+    //   the promise created by __remixContext.n.
+    // - __remixContext.t is a a map or routeId to keys to an object containing `e` and `r` methods
+    //   to resolve or reject the promise created by __remixContext.n.
+    // - __remixContext.a is the active number of deferred scripts that should be rendered to match
+    //   the SSR tree for hydration on the client.
+    contextScript += !activeDeferreds
+      ? ""
+      : [
+          "__remixContext.p = function(v,e,p,x) {",
+          "  if (typeof e !== 'undefined') {",
+          "    x=new Error(e.message);",
+          process.env.NODE_ENV === "development" ? `x.stack=e.stack;` : "",
+          "    p=Promise.reject(x);",
+          "  } else {",
+          "    p=Promise.resolve(v);",
+          "  }",
+          "  return p;",
+          "};",
+          "__remixContext.n = function(i,k) {",
+          "  __remixContext.t = __remixContext.t || {};",
+          "  __remixContext.t[i] = __remixContext.t[i] || {};",
+          "  let p = new Promise((r, e) => {__remixContext.t[i][k] = {r:(v)=>{r(v);},e:(v)=>{e(v);}};});",
+          typeof abortDelay === "number"
+            ? `setTimeout(() => {if(typeof p._error !== "undefined" || typeof p._data !== "undefined"){return;} __remixContext.t[i][k].e(new Error("Server timeout."))}, ${abortDelay});`
+            : "",
+          "  return p;",
+          "};",
+          "__remixContext.r = function(i,k,v,e,p,x) {",
+          "  p = __remixContext.t[i][k];",
+          "  if (typeof e !== 'undefined') {",
+          "    x=new Error(e.message);",
+          process.env.NODE_ENV === "development" ? `x.stack=e.stack;` : "",
+          "    p.e(x);",
+          "  } else {",
+          "    p.r(v);",
+          "  }",
+          "};",
+        ].join("\n") +
+        Object.entries(activeDeferreds)
+          .map(([routeId, deferredData]) => {
+            let pendingKeys = new Set(deferredData.pendingKeys);
+            let promiseKeyValues = deferredData.deferredKeys
+              .map((key) => {
+                if (pendingKeys.has(key)) {
+                  deferredScripts.push(
+                    <DeferredHydrationScript
+                      key={`${routeId} | ${key}`}
+                      deferredData={deferredData}
+                      routeId={routeId}
+                      dataKey={key}
+                    />
+                  );
+
+                  return `${JSON.stringify(
+                    key
+                  )}:__remixContext.n(${JSON.stringify(
+                    routeId
+                  )}, ${JSON.stringify(key)})`;
+                } else {
+                  let trackedPromise = deferredData.data[key] as TrackedPromise;
+                  if (typeof trackedPromise._error !== "undefined") {
+                    let toSerialize: { message: string; stack?: string } = {
+                      message: trackedPromise._error.message,
+                      stack: undefined,
+                    };
+                    if (process.env.NODE_ENV === "development") {
+                      toSerialize.stack = trackedPromise._error.stack;
+                    }
+                    return `${JSON.stringify(
+                      key
+                    )}:__remixContext.p(!1, ${escapeHtml(
+                      JSON.stringify(toSerialize)
+                    )})`;
+                  } else {
+                    if (typeof trackedPromise._data === "undefined") {
+                      throw new Error(
+                        `The deferred data for ${key} was not resolved, did you forget to return data from a deferred promise?`
+                      );
+                    }
+                    return `${JSON.stringify(
+                      key
+                    )}:__remixContext.p(${escapeHtml(
+                      JSON.stringify(trackedPromise._data)
+                    )})`;
+                  }
+                }
+              })
+              .join(",\n");
+            return `Object.assign(__remixContext.state.loaderData[${JSON.stringify(
+              routeId
+            )}], {${promiseKeyValues}});`;
+          })
+          .join("\n") +
+        (deferredScripts.length > 0
+          ? `__remixContext.a=${deferredScripts.length};`
+          : "");
+
+    let routeModulesScript = !isStatic
+      ? " "
+      : `${
+          manifest.hmr?.runtime
+            ? `import ${JSON.stringify(manifest.hmr.runtime)};`
+            : ""
+        }import ${JSON.stringify(manifest.url)};
+${matches
+  .map(
+    (match, index) =>
+      `import * as route${index} from ${JSON.stringify(
+        manifest.routes[match.route.id].module
+      )};`
+  )
+  .join("\n")}
 window.__remixRouteModules = {${matches
-      .map((match, index) => `${JSON.stringify(match.route.id)}:route${index}`)
-      .join(",")}};
+          .map(
+            (match, index) => `${JSON.stringify(match.route.id)}:route${index}`
+          )
+          .join(",")}};
 
 import(${JSON.stringify(manifest.entry.module)});`;
 
@@ -810,6 +949,12 @@ import(${JSON.stringify(manifest.entry.module)});`;
     // eslint-disable-next-line
   }, []);
 
+  if (!isStatic && typeof __remixContext === "object" && __remixContext.a) {
+    for (let i = 0; i < __remixContext.a; i++) {
+      deferredScripts.push(<DeferredHydrationScript key={i} />);
+    }
+  }
+
   // avoid waterfall when importing the next route module
   let nextMatches = React.useMemo(() => {
     if (navigation.location) {
@@ -833,7 +978,7 @@ import(${JSON.stringify(manifest.entry.module)});`;
     })
     .flat(1);
 
-  let preloads = manifest.entry.imports.concat(routePreloads);
+  let preloads = isHydrated ? [] : manifest.entry.imports.concat(routePreloads);
 
   return (
     <>
@@ -855,8 +1000,102 @@ import(${JSON.stringify(manifest.entry.module)});`;
           crossOrigin={props.crossOrigin}
         />
       ))}
-      {isHydrated ? null : initialScripts}
+      {!isHydrated && initialScripts}
+      {!isHydrated && deferredScripts}
     </>
+  );
+}
+
+function DeferredHydrationScript({
+  dataKey,
+  deferredData,
+  routeId,
+}: {
+  dataKey?: string;
+  deferredData?: DeferredData;
+  routeId?: string;
+}) {
+  if (typeof document === "undefined" && deferredData && dataKey && routeId) {
+    invariant(
+      deferredData.pendingKeys.includes(dataKey),
+      `Deferred data for route ${routeId} with key ${dataKey} was not pending but tried to render a script for it.`
+    );
+  }
+
+  return (
+    <React.Suspense
+      fallback={
+        // This makes absolutely no sense. The server renders null as a fallback,
+        // but when hydrating, we need to render a script tag to avoid a hydration issue.
+        // To reproduce a hydration mismatch, just render null as a fallback.
+        typeof document === "undefined" &&
+        deferredData &&
+        dataKey &&
+        routeId ? null : (
+          <script
+            async
+            suppressHydrationWarning
+            dangerouslySetInnerHTML={{ __html: " " }}
+          />
+        )
+      }
+    >
+      {typeof document === "undefined" && deferredData && dataKey && routeId ? (
+        <Await
+          resolve={deferredData.data[dataKey]}
+          errorElement={
+            <ErrorDeferredHydrationScript dataKey={dataKey} routeId={routeId} />
+          }
+          children={(data) => (
+            <script
+              async
+              suppressHydrationWarning
+              dangerouslySetInnerHTML={{
+                __html: `__remixContext.r(${JSON.stringify(
+                  routeId
+                )}, ${JSON.stringify(dataKey)}, ${escapeHtml(
+                  JSON.stringify(data)
+                )});`,
+              }}
+            />
+          )}
+        />
+      ) : (
+        <script
+          async
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: " " }}
+        />
+      )}
+    </React.Suspense>
+  );
+}
+
+function ErrorDeferredHydrationScript({
+  dataKey,
+  routeId,
+}: {
+  dataKey: string;
+  routeId: string;
+}) {
+  let error = useAsyncError() as Error;
+  let toSerialize: { message: string; stack?: string } = {
+    message: error.message,
+    stack: undefined,
+  };
+  if (process.env.NODE_ENV === "development") {
+    toSerialize.stack = error.stack;
+  }
+
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{
+        __html: `__remixContext.r(${JSON.stringify(routeId)}, ${JSON.stringify(
+          dataKey
+        )}, !1, ${escapeHtml(JSON.stringify(toSerialize))});`,
+      }}
+    />
   );
 }
 
@@ -895,18 +1134,22 @@ export interface RouteMatch {
 export function useMatches(): RouteMatch[] {
   let { routeModules } = useRemixContext();
   let matches = useMatchesRR();
-  return matches.map((match) => {
-    let remixMatch: RouteMatch = {
-      id: match.id,
-      pathname: match.pathname,
-      params: match.params,
-      data: match.data,
-      // Need to grab handle here since we don't have it at client-side route
-      // creation time
-      handle: routeModules[match.id].handle,
-    };
-    return remixMatch;
-  });
+  return React.useMemo(
+    () =>
+      matches.map((match) => {
+        let remixMatch: RouteMatch = {
+          id: match.id,
+          pathname: match.pathname,
+          params: match.params,
+          data: match.data,
+          // Need to grab handle here since we don't have it at client-side route
+          // creation time
+          handle: routeModules[match.id].handle,
+        };
+        return remixMatch;
+      }),
+    [matches, routeModules]
+  );
 }
 
 /**
@@ -931,10 +1174,22 @@ export function useActionData<T = AppData>(): SerializeFrom<T> | undefined {
  * Returns everything you need to know about a page transition to build pending
  * navigation indicators and optimistic UI on data mutations.
  *
+ * @deprecated in favor of useNavigation
+ *
  * @see https://remix.run/hooks/use-transition
  */
 export function useTransition(): Transition {
   let navigation = useNavigation();
+
+  React.useEffect(() => {
+    warnOnce(
+      false,
+      "⚠️ DEPRECATED: The `useTransition` hook has been deprecated in favor of " +
+        "`useNavigation` and will be removed in Remix v2.  Please update your " +
+        "code to leverage `useNavigation`.\n\nSee https://remix.run/docs/hooks/use-transition " +
+        "and https://remix.run/docs/hooks/use-navigation for more information."
+    );
+  }, []);
 
   return React.useMemo(
     () => convertNavigationToTransition(navigation),
@@ -1137,21 +1392,24 @@ export function useFetcher<TData = any>(): FetcherWithComponents<
   SerializeFrom<TData>
 > {
   let fetcherRR = useFetcherRR();
-  let remixFetcher = convertRouterFetcherToRemixFetcher({
-    state: fetcherRR.state,
-    data: fetcherRR.data,
-    formMethod: fetcherRR.formMethod,
-    formAction: fetcherRR.formAction,
-    formData: fetcherRR.formData,
-    formEncType: fetcherRR.formEncType,
-    " _hasFetcherDoneAnything ": fetcherRR[" _hasFetcherDoneAnything "],
-  });
-  return {
-    ...remixFetcher,
-    load: fetcherRR.load,
-    submit: fetcherRR.submit,
-    Form: fetcherRR.Form,
-  };
+
+  return React.useMemo(() => {
+    let remixFetcher = convertRouterFetcherToRemixFetcher({
+      state: fetcherRR.state,
+      data: fetcherRR.data,
+      formMethod: fetcherRR.formMethod,
+      formAction: fetcherRR.formAction,
+      formData: fetcherRR.formData,
+      formEncType: fetcherRR.formEncType,
+      " _hasFetcherDoneAnything ": fetcherRR[" _hasFetcherDoneAnything "],
+    });
+    return {
+      ...remixFetcher,
+      load: fetcherRR.load,
+      submit: fetcherRR.submit,
+      Form: fetcherRR.Form,
+    };
+  }, [fetcherRR]);
 }
 
 function convertRouterFetcherToRemixFetcher(
@@ -1169,6 +1427,10 @@ function convertRouterFetcherToRemixFetcher(
       let fetcher: FetcherStates["Done"] = {
         state: "idle",
         type: "done",
+        formMethod: undefined,
+        formAction: undefined,
+        formData: undefined,
+        formEncType: undefined,
         submission: undefined,
         data,
       };
@@ -1296,6 +1558,10 @@ function convertRouterFetcherToRemixFetcher(
   let fetcher: FetcherStates["Loading"] = {
     state: "loading",
     type: "normalLoad",
+    formMethod: undefined,
+    formAction: undefined,
+    formData: undefined,
+    formEncType: undefined,
     submission: undefined,
     data,
   };
@@ -1311,9 +1577,11 @@ export const LiveReload =
     ? () => null
     : function LiveReload({
         port = Number(process.env.REMIX_DEV_SERVER_WS_PORT || 8002),
+        timeoutMs = 1000,
         nonce = undefined,
       }: {
         port?: number;
+        timeoutMs?: number;
         /**
          * @deprecated this property is no longer relevant.
          */
@@ -1329,11 +1597,12 @@ export const LiveReload =
                 function remixLiveReloadConnect(config) {
                   let protocol = location.protocol === "https:" ? "wss:" : "ws:";
                   let host = location.hostname;
-                  let socketPath = protocol + "//" + host + ":" + ${String(
+                  let port = (window.__remixContext && window.__remixContext.dev && window.__remixContext.dev.liveReloadPort) || ${String(
                     port
-                  )} + "/socket";
+                  )};
+                  let socketPath = protocol + "//" + host + ":" + port + "/socket";
                   let ws = new WebSocket(socketPath);
-                  ws.onmessage = (message) => {
+                  ws.onmessage = async (message) => {
                     let event = JSON.parse(message.data);
                     if (event.type === "LOG") {
                       console.log(event.message);
@@ -1341,6 +1610,44 @@ export const LiveReload =
                     if (event.type === "RELOAD") {
                       console.log("💿 Reloading window ...");
                       window.location.reload();
+                    }
+                    if (event.type === "HMR") {
+                      if (!window.__hmr__ || !window.__hmr__.contexts) {
+                        console.log("💿 [HMR] No HMR context, reloading window ...");
+                        window.location.reload();
+                        return;
+                      }
+                      if (!event.updates || !event.updates.length) return;
+                      let updateAccepted = false;
+                      for (let update of event.updates) {
+                        console.log("[HMR] " + update.reason + " [" + update.id +"]")
+                        if (update.revalidate) {
+                          console.log("[HMR] Revalidating [" + update.id + "]");
+                        }
+                        let imported = await import(update.url +  '?t=' + event.assetsManifest.hmr.timestamp);
+                        if (window.__hmr__.contexts[update.id]) {
+                          let accepted = window.__hmr__.contexts[update.id].emit(
+                            imported
+                          );
+                          if (accepted) {
+                            console.log("[HMR] Updated accepted by", update.id);
+                            updateAccepted = true;
+                          }
+                        }
+                      }
+                      if (event.assetsManifest && window.__hmr__.contexts["remix:manifest"]) {
+                        let accepted = window.__hmr__.contexts["remix:manifest"].emit(
+                          event.assetsManifest
+                        );
+                        if (accepted) {
+                          console.log("[HMR] Updated accepted by", "remix:manifest");
+                          updateAccepted = true;
+                        }
+                      }
+                      if (!updateAccepted) {
+                        console.log("[HMR] Updated rejected, reloading...");
+                        window.location.reload();
+                      }
                     }
                   };
                   ws.onopen = () => {
@@ -1356,7 +1663,7 @@ export const LiveReload =
                           remixLiveReloadConnect({
                             onOpen: () => window.location.reload(),
                           }),
-                        1000
+                      ${String(timeoutMs)}
                       );
                     }
                   };

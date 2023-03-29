@@ -1,5 +1,138 @@
 # `@remix-run/dev`
 
+## 1.14.3
+
+### Patch Changes
+
+- dev server is resilient to build failures ([#5795](https://github.com/remix-run/remix/pull/5795))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.14.3`
+
+## 1.14.2
+
+### Patch Changes
+
+- remove premature deprecation warnings ([#5790](https://github.com/remix-run/remix/pull/5790))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.14.2`
+
+## 1.14.1
+
+### Patch Changes
+
+- Add types for importing `*.ico` files ([#5430](https://github.com/remix-run/remix/pull/5430))
+- Allow `moduleResolution: "bundler"` in tsconfig.json ([#5576](https://github.com/remix-run/remix/pull/5576))
+- Fix issue with x-route imports creating multiple entries in the module graph ([#5721](https://github.com/remix-run/remix/pull/5721))
+- Add `serverBuildTarget` deprecation warning ([#5624](https://github.com/remix-run/remix/pull/5624))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.14.1`
+
+## 1.14.0
+
+### Minor Changes
+
+- Hot Module Replacement and Hot Data Revalidation ([#5259](https://github.com/remix-run/remix/pull/5259))
+  - Requires `unstable_dev` future flag to be enabled
+  - HMR provided through React Refresh
+  - Features:
+    - HMR for component and style changes
+    - HDR when loaders for current route change
+  - Known limitations for MVP:
+    - Only implemented for React via React Refresh
+    - No `import.meta.hot` API exposed yet
+    - Revalidates _all_ loaders on route when loader changes are detected
+    - Loader changes do not account for imported dependencies changing
+- Make `entry.client` and `entry.server` files optional ([#4600](https://github.com/remix-run/remix/pull/4600))
+  - we'll use a bundled version of each unless you provide your own
+
+### Patch Changes
+
+- Fixes flat route inconsistencies where `route.{ext}` wasn't always being treated like `index.{ext}` when used in a folder ([#5459](https://github.com/remix-run/remix/pull/5459))
+
+  - Route conflict no longer throw errors and instead display a helpful warning that we're using the first one we found.
+
+    ```log
+    ⚠️ Route Path Collision: "/dashboard"
+
+    The following routes all define the same URL, only the first one will be used
+
+    🟢️️ routes/dashboard/route.tsx
+    ⭕️️ routes/dashboard.tsx
+    ```
+
+    ```log
+    ⚠️ Route Path Collision: "/"
+
+    The following routes all define the same URL, only the first one will be used
+
+    🟢️️ routes/_landing._index.tsx
+    ⭕️️ routes/_dashboard._index.tsx
+    ⭕️ routes/_index.tsx
+    ```
+
+- Log errors thrown during initial build in development. ([#5441](https://github.com/remix-run/remix/pull/5441))
+
+- Sync `FutureConfig` interface between packages ([#5398](https://github.com/remix-run/remix/pull/5398))
+
+- Add file loader for importing `.csv` files ([#3920](https://github.com/remix-run/remix/pull/3920))
+
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.14.0`
+
+## 1.13.0
+
+### Minor Changes
+
+- We are deprecating `serverBuildTarget` in `remix.config`. See the [release notes for v1.13.0](https://github.com/remix-run/remix/releases/tag/remix%401.13.0) for more information. ([#5354](https://github.com/remix-run/remix/pull/5354))
+- Add built-in support for PostCSS via the `future.unstable_postcss` feature flag ([#5229](https://github.com/remix-run/remix/pull/5229))
+- Add built-in support for Tailwind via the `future.unstable_tailwind` feature flag ([#5229](https://github.com/remix-run/remix/pull/5229))
+
+### Patch Changes
+
+- Mark Vanilla Extract files as side effects to ensure that files only containing global styles aren't tree-shaken ([#5246](https://github.com/remix-run/remix/pull/5246))
+- Support decorators in files using CSS side-effect imports ([#5305](https://github.com/remix-run/remix/pull/5305))
+- We made several Flat route fixes and enhancements. See the [release notes for v1.13.0](https://github.com/remix-run/remix/releases/tag/remix%401.13.0) for more information. ([#5228](https://github.com/remix-run/remix/pull/5228))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.13.0`
+
+## 1.12.0
+
+### Minor Changes
+
+- Added a new development server available in the Remix config under the `unstable_dev` flag. [See the release notes](https://github.com/remix-run/remix/releases/tag/remix%401.12.0) for a full description. ([#5133](https://github.com/remix-run/remix/pull/5133))
+
+### Patch Changes
+
+- Fixed issues with `v2_routeConvention` on Windows so that new and renamed files are properly included ([#5266](https://github.com/remix-run/remix/pull/5266))
+- Server build should not be removed in `remix watch` and `remix dev` ([#5228](https://github.com/remix-run/remix/pull/5228))
+- The dev server will now clean up build directories whenever a rebuild starts ([#5223](https://github.com/remix-run/remix/pull/5223))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.12.0`
+
+## 1.11.1
+
+### Patch Changes
+
+- Fixed a bug with `v2_routeConvention` that prevented `index` modules from being recognized for route paths ([`195291a3d`](https://github.com/remix-run/remix/commit/195291a3d8c0e098931199bcc26277a45cee0eb9))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.11.1`
+
+## 1.11.0
+
+### Minor Changes
+
+- Specify file loader for `.fbx`, `.glb`, `.gltf`, `.hdr`, and `.mov` files ([#5030](https://github.com/remix-run/remix/pull/5030))
+- Added support for [Vanilla Extract](https://vanilla-extract.style) via the `unstable_vanillaExtract` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#5040](https://github.com/remix-run/remix/pull/5040))
+- Add support for CSS side-effect imports via the `unstable_cssSideEffectImports` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#4919](https://github.com/remix-run/remix/pull/4919))
+- Add support for CSS Modules via the `unstable_cssModules` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#4852](https://github.com/remix-run/remix/pull/4852))
+
+### Patch Changes
+
+- Add new "flat" routing conventions. This convention will be the default in v2 but is available now under the `v2_routeConvention` future flag. ([#4880](https://github.com/remix-run/remix/pull/4880))
+- Added support for `handle` in MDX frontmatter ([#4865](https://github.com/remix-run/remix/pull/4865))
+- Updated dependencies:
+  - `@remix-run/server-runtime@1.11.0`
+
 ## 1.10.1
 
 ### Patch Changes

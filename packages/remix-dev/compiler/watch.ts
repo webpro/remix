@@ -6,6 +6,7 @@ import type { RemixConfig } from "../config";
 import { readConfig } from "../config";
 import { logCompileFailure } from "./onCompileFailure";
 import type { CompileOptions } from "./options";
+import type { CompileResult } from "./remixCompiler";
 import { compile, createRemixCompiler, dispose } from "./remixCompiler";
 import { warnOnce } from "./warnings";
 
@@ -20,20 +21,23 @@ function isEntryPoint(config: RemixConfig, file: string): boolean {
 }
 
 export type WatchOptions = Partial<CompileOptions> & {
+  reloadConfig?(root: string): Promise<RemixConfig>;
   onRebuildStart?(): void;
-  onRebuildFinish?(durationMs: number): void;
+  onRebuildFinish?(durationMs: number, result?: CompileResult): void;
   onFileCreated?(file: string): void;
   onFileChanged?(file: string): void;
   onFileDeleted?(file: string): void;
-  onInitialBuild?(durationMs: number): void;
+  onInitialBuild?(durationMs: number, result?: CompileResult): void;
 };
 
 export async function watch(
   config: RemixConfig,
   {
     mode = "development",
+    liveReloadPort,
     target = "node14",
     sourcemap = true,
+    reloadConfig = readConfig,
     onWarning = warnOnce,
     onCompileFailure = logCompileFailure,
     onRebuildStart,
@@ -46,6 +50,7 @@ export async function watch(
 ): Promise<() => Promise<void>> {
   let options: CompileOptions = {
     mode,
+    liveReloadPort,
     target,
     sourcemap,
     onCompileFailure,
@@ -56,8 +61,8 @@ export async function watch(
   let compiler = createRemixCompiler(config, options);
 
   // initial build
-  await compile(compiler);
-  onInitialBuild?.(Date.now() - start);
+  let result = await compile(compiler, { onCompileFailure });
+  onInitialBuild?.(Date.now() - start, result);
 
   let restart = debounce(async () => {
     onRebuildStart?.();
@@ -65,22 +70,24 @@ export async function watch(
     dispose(compiler);
 
     try {
-      config = await readConfig(config.rootDirectory);
+      config = await reloadConfig(config.rootDirectory);
     } catch (error: unknown) {
       onCompileFailure(error as Error);
       return;
     }
 
     compiler = createRemixCompiler(config, options);
-    await compile(compiler);
-    onRebuildFinish?.(Date.now() - start);
+    let result = await compile(compiler, { onCompileFailure });
+    onRebuildFinish?.(Date.now() - start, result);
   }, 500);
 
   let rebuild = debounce(async () => {
     onRebuildStart?.();
     let start = Date.now();
-    await compile(compiler, { onCompileFailure });
-    onRebuildFinish?.(Date.now() - start);
+    let result = await compile(compiler, {
+      onCompileFailure,
+    });
+    onRebuildFinish?.(Date.now() - start, result);
   }, 100);
 
   let toWatch = [config.appDirectory];
@@ -110,7 +117,7 @@ export async function watch(
       onFileCreated?.(file);
 
       try {
-        config = await readConfig(config.rootDirectory);
+        config = await reloadConfig(config.rootDirectory);
       } catch (error: unknown) {
         onCompileFailure(error as Error);
         return;

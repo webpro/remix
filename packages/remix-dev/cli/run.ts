@@ -110,6 +110,13 @@ ${colors.logoBlue("R")} ${colors.logoGreen("E")} ${colors.logoYellow(
     $ remix routes
     $ remix routes my-app
     $ remix routes --json
+
+  ${colors.heading("Reveal the used entry point")}:
+
+    $ remix reveal entry.client
+    $ remix reveal entry.server
+    $ remix reveal entry.client --no-typescript
+    $ remix reveal entry.server --no-typescript
 `;
 
 const templateChoices = [
@@ -132,11 +139,12 @@ const npxInterop = {
 
 async function dev(
   projectDir: string,
-  flags: { debug?: boolean; port?: number }
+  flags: { debug?: boolean; port?: number; appServerPort?: number }
 ) {
   if (!process.env.NODE_ENV) process.env.NODE_ENV = "development";
+
   if (flags.debug) inspector.open();
-  await commands.dev(projectDir, process.env.NODE_ENV, flags.port);
+  await commands.dev(projectDir, process.env.NODE_ENV, flags);
 }
 
 /**
@@ -154,6 +162,7 @@ export async function run(argv: string[] = process.argv.slice(2)) {
 
   let args = arg(
     {
+      "--app-server-port": Number,
       "--debug": Boolean,
       "--no-delete": Boolean,
       "--dry": Boolean,
@@ -477,6 +486,11 @@ export async function run(argv: string[] = process.argv.slice(2)) {
       break;
     case "codemod": {
       await commands.codemod(input[1], input[2]);
+      break;
+    }
+    case "reveal": {
+      // TODO: simplify getting started guide
+      await commands.generateEntry(input[1], input[2], flags.typescript);
       break;
     }
     case "dev":

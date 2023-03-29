@@ -1706,6 +1706,12 @@ And to make it even cooler, you don't necessarily need prisma or direct database
 
 Oh, you've just got REST endpoints you hit? That's fine too! You can easily filter out the extra data before sending it off in your loader. Because it all happens on the server, you can save your user's download size easily without having to convince your backend engineers to change their entire API. Neat!
 
+Filtering out data you don't render isn't just about sending less over the wire, you should also filter out any sensitive data you don't want exposed to the client.
+
+<docs-error>
+Whatever you return from your loader will be exposed to the client, even if the component doesn't render it. Treat your loaders with the same care as public API endpoints.
+</docs-error>
+
 ### Network Type Safety
 
 In our code we're using the `useLoaderData`'s type generic and specifying our `LoaderData` so we can get nice auto-complete, but it's not _really_ getting us type safety because the `loader` and the `useLoaderData` are running in completely different environments. Remix ensures we get what the server sent, but who really knows? Maybe in a fit of rage, your co-worker set up your server to automatically remove references to dogs (they prefer cats).
@@ -1795,8 +1801,7 @@ const [randomJoke] = await db.joke.findMany({
 
 <summary>app/routes/jokes/index.tsx</summary>
 
-```tsx filename=app/routes/jokes/index.tsx lines=[5,7-15,18]
-import type { LoaderArgs } from "@remix-run/node";
+```tsx filename=app/routes/jokes/index.tsx lines=[1-2,4,6-14,17]
 import { json } from "@remix-run/node";
 import { useLoaderData, Link } from "@remix-run/react";
 
@@ -1963,9 +1968,9 @@ But if there's an error, you can return an object with the error messages and th
 
 <summary>app/routes/jokes/new.tsx</summary>
 
-```tsx filename=app/routes/jokes/new.tsx lines=[2-3,6,8-12,14-18,28-32,35-38,40-46,53,64,66-74,77-85,91,93-101,104-112,115-122]
+```tsx filename=app/routes/jokes/new.tsx lines=[3,6,8-12,14-18,28-32,35-38,40-46,53,64,66-74,77-85,91,93-101,104-112,115-122]
 import type { ActionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
 
 import { db } from "~/utils/db.server";
@@ -2121,11 +2126,11 @@ Great! You should now have a form that validates the fields on the server and di
 
 Why don't you pop open my code example for a second. I want to show you a few things about the way I'm doing this.
 
-First I want you to notice that I've added an `ActionData` type so we could get some type safety. Keep in mind that `useActionData` can return `undefined` if the action hasn't been called yet, so we've got a bit of defensive programming going on there.
+First I want you to notice that I've passed `typeof action` to the `useActionData` generic function. This way, `actionData` type will properly be inferred, and we'll get some type safety. Keep in mind that `useActionData` can return `undefined` if the action hasn't been called yet, so we've got a bit of defensive programming going on there.
 
 You may also notice that I return the fields as well. This is so that the form can be re-rendered with the values from the server in the event that JavaScript fails to load for some reason. That's what the `defaultValue` stuff is all about as well.
 
-The `badRequest` helper function is important because it gives us typechecking that ensures our return value is of type `ActionData`, while still returning the accurate HTTP status, [`400 Bad Request`][400-bad-request], to the client. If we just return the `ActionData` value, that would result in a `200 OK` response, which isn't suitable since the form submission had errors.
+The `badRequest` helper function will automatically infer the type of the passed data, while still returning the accurate HTTP status, [`400 Bad Request`][400-bad-request], to the client. If we just used `json()` without specifying the status, that would result in a `200 OK` response, which isn't suitable since the form submission had errors.
 
 Another thing I want to call out is how all of this is just so nice and declarative. You don't have to think about state at all here. Your action gets some data, you process it and return a value. The component consumes the action data and renders based on that value. No managing state here. No thinking about race conditions. Nothing.
 
@@ -2512,12 +2517,11 @@ Great, now that we've got the UI looking nice, let's add some logic. This will b
 
 <summary>app/routes/login.tsx</summary>
 
-```tsx filename=app/routes/login.tsx lines=[2,5,8,13-14,20-24,26-30,32-38,40-112,115,138-141,150-153,164-172,174-182,190-198,200-208,210-219]
+```tsx filename=app/routes/login.tsx lines=[2,7,12-13,19-23,25-29,31-37,39-111,114,137-140,149-152,163-171,173-181,189-197,199-207,209-218]
 import type {
   ActionArgs,
   LinksFunction,
 } from "@remix-run/node";
-import { json } from "@remix-run/node";
 import {
   Link,
   useActionData,
@@ -3127,7 +3131,7 @@ You may also notice that our solution makes use of the `login` route's `redirect
 
 ```tsx filename=app/routes/jokes/new.tsx lines=[7,22,51]
 import type { ActionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { useActionData } from "@remix-run/react";
 
 import { db } from "~/utils/db.server";
@@ -3499,10 +3503,7 @@ export default function JokesRoute() {
 <summary>app/routes/logout.tsx</summary>
 
 ```tsx filename=app/routes/logout.tsx
-import type {
-  ActionArgs,
-  LoaderArgs,
-} from "@remix-run/node";
+import type { ActionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 
 import { logout } from "~/utils/session.server";
@@ -3681,12 +3682,11 @@ export async function createUserSession(
 
 <summary>app/routes/login.tsx</summary>
 
-```tsx filename=app/routes/login.tsx lines=[18,102-110]
+```tsx filename=app/routes/login.tsx lines=[17,101-109]
 import type {
   ActionArgs,
   LinksFunction,
 } from "@remix-run/node";
-import { json } from "@remix-run/node";
 import {
   Link,
   useActionData,
@@ -5005,13 +5005,12 @@ export default function IndexRoute() {
 
 <summary>app/routes/login.tsx</summary>
 
-```tsx filename=app/routes/login.tsx lines=[4,22-25]
+```tsx filename=app/routes/login.tsx lines=[4,21-24]
 import type {
   ActionArgs,
   LinksFunction,
   MetaFunction,
 } from "@remix-run/node";
-import { json } from "@remix-run/node";
 import {
   Link,
   useActionData,
@@ -5741,7 +5740,7 @@ export function JokeDisplay({
 
 <summary>app/routes/jokes/$jokeId.tsx</summary>
 
-```tsx filename=app/routes/jokes/$jokeId.tsx lines=[14,89]
+```tsx filename=app/routes/jokes/$jokeId.tsx lines=[13,88]
 import type {
   ActionArgs,
   LoaderArgs,
@@ -5749,7 +5748,6 @@ import type {
 } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import {
-  Link,
   useCatch,
   useLoaderData,
   useParams,
@@ -5890,7 +5888,7 @@ import {
   Link,
   useActionData,
   useCatch,
-  useTransition,
+  useNavigation,
 } from "@remix-run/react";
 
 import { JokeDisplay } from "~/components/joke";
@@ -5958,12 +5956,11 @@ export const action = async ({ request }: ActionArgs) => {
 
 export default function NewJokeRoute() {
   const actionData = useActionData<typeof action>();
-  const transition = useTransition();
+  const navigation = useNavigation();
 
-  if (transition.submission) {
-    const name = transition.submission.formData.get("name");
-    const content =
-      transition.submission.formData.get("content");
+  if (navigation.formData) {
+    const name = navigation.formData.get("name");
+    const content = navigation.formData.get("content");
     if (
       typeof name === "string" &&
       typeof content === "string" &&

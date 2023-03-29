@@ -31,12 +31,25 @@ export interface AssetsManifest {
       hasErrorBoundary: boolean;
     };
   };
+  cssBundleHref?: string;
+  hmr?: {
+    timestamp: number;
+    runtime: string;
+    routes: Record<string, { loaderHash: string }>;
+  };
 }
 
-export async function createAssetsManifest(
-  config: RemixConfig,
-  metafile: esbuild.Metafile
-): Promise<AssetsManifest> {
+export async function createAssetsManifest({
+  config,
+  metafile,
+  cssBundlePath,
+  hmr,
+}: {
+  config: RemixConfig;
+  metafile: esbuild.Metafile;
+  cssBundlePath?: string;
+  hmr?: AssetsManifest["hmr"];
+}): Promise<AssetsManifest> {
   function resolveUrl(outputPath: string): string {
     return createUrl(
       config.publicPath,
@@ -52,10 +65,6 @@ export async function createAssetsManifest(
       .map((im) => resolveUrl(im.path));
   }
 
-  let entryClientFile = path.resolve(
-    config.appDirectory,
-    config.entryClientFile
-  );
   let routesByFile: Map<string, Route[]> = Object.keys(config.routes).reduce(
     (map, key) => {
       let route = config.routes[key];
@@ -75,7 +84,7 @@ export async function createAssetsManifest(
     let output = metafile.outputs[key];
     if (!output.entryPoint) continue;
 
-    if (path.resolve(output.entryPoint) === entryClientFile) {
+    if (path.resolve(output.entryPoint) === config.entryClientFilePath) {
       entry = {
         module: resolveUrl(key),
         imports: resolveImports(output.imports),
@@ -113,9 +122,13 @@ export async function createAssetsManifest(
   invariant(entry, `Missing output for entry point`);
 
   optimizeRoutes(routes, entry.imports);
-  let version = getHash(JSON.stringify({ entry, routes })).slice(0, 8);
+  let version = getHash(
+    JSON.stringify({ entry, routes, hmrRoutes: hmr?.routes })
+  ).slice(0, 8);
 
-  return { version, entry, routes };
+  let cssBundleHref = cssBundlePath ? resolveUrl(cssBundlePath) : undefined;
+
+  return { version, entry, routes, cssBundleHref, hmr };
 }
 
 type ImportsCache = { [routeId: string]: string[] };

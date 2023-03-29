@@ -7,26 +7,28 @@ title: headers
 Each route can define its own HTTP headers. One of the common headers is the `Cache-Control` header that indicates to browser and CDN caches where and for how long a page is able to be cached.
 
 ```tsx
-export function headers({
+import type { HeadersFunction } from "@remix-run/node"; // or cloudflare/deno
+
+export const headers: HeadersFunction = ({
   actionHeaders,
   loaderHeaders,
   parentHeaders,
-}) {
-  return {
-    "X-Stretchy-Pants": "its for fun",
-    "Cache-Control": "max-age=300, s-maxage=3600",
-  };
-}
+}) => ({
+  "X-Stretchy-Pants": "its for fun",
+  "Cache-Control": "max-age=300, s-maxage=3600",
+});
 ```
 
 Usually your data is a better indicator of your cache duration than your route module (data tends to be more dynamic than markup), so the `action`'s & `loader`'s headers are passed in to `headers()` too:
 
 ```tsx
-export function headers({ loaderHeaders }) {
-  return {
-    "Cache-Control": loaderHeaders.get("Cache-Control"),
-  };
-}
+import type { HeadersFunction } from "@remix-run/node"; // or cloudflare/deno
+
+export const headers: HeadersFunction = ({
+  loaderHeaders,
+}) => ({
+  "Cache-Control": loaderHeaders.get("Cache-Control"),
+});
 ```
 
 Note: `actionHeaders` & `loaderHeaders` are an instance of the [Web Fetch API][headers] `Headers` class.
@@ -58,9 +60,13 @@ We don't want surprise headers in your responses, so it's your job to merge them
 That is all to say that Remix has given you a very large gun with which to shoot your foot. You need to be careful not to send a `Cache-Control` from a child route module that is more aggressive than a parent route. Here's some code that picks the least aggressive caching in these cases:
 
 ```tsx
+import type { HeadersFunction } from "@remix-run/node"; // or cloudflare/deno
 import parseCacheControl from "parse-cache-control";
 
-export function headers({ loaderHeaders, parentHeaders }) {
+export const headers: HeadersFunction = ({
+  loaderHeaders,
+  parentHeaders,
+}) => {
   const loaderCache = parseCacheControl(
     loaderHeaders.get("Cache-Control")
   );
@@ -78,7 +84,7 @@ export function headers({ loaderHeaders, parentHeaders }) {
   return {
     "Cache-Control": `max-age=${maxAge}`,
   };
-}
+};
 ```
 
 All that said, you can avoid this entire problem by _not defining headers in parent routes_ and only in leaf routes. Every layout that can be visited directly will likely have an "index route". If you only define headers on your leaf routes, not your parent routes, you will never have to worry about merging headers.

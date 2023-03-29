@@ -9,7 +9,7 @@ import type {
   UNSAFE_RouteModules as RouteModules,
   UNSAFE_RemixContextObject as RemixContextObject,
 } from "@remix-run/react";
-import type { RouteObject } from "react-router-dom";
+import type { DataRouteObject, RouteObject } from "react-router-dom";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
 type RemixStubOptions = {
@@ -42,7 +42,7 @@ type RemixStubOptions = {
   remixConfigFuture?: Partial<FutureConfig>;
 };
 
-export function createRemixStub(routes: RouteObject[]) {
+export function createRemixStub(routes: (RouteObject | DataRouteObject)[]) {
   return function RemixStub({
     initialEntries,
     initialIndex,
@@ -63,11 +63,19 @@ export function createRemixStub(routes: RouteObject[]) {
     if (remixContextRef.current == null) {
       remixContextRef.current = {
         future: {
+          unstable_cssModules: false,
+          unstable_cssSideEffectImports: false,
+          unstable_dev: false,
+          unstable_postcss: false,
+          unstable_tailwind: false,
+          unstable_vanillaExtract: false,
+          v2_errorBoundary: false,
           v2_meta: false,
+          v2_routeConvention: false,
           ...remixConfigFuture,
         },
-        manifest: createManifest(routes),
-        routeModules: createRouteModules(routes),
+        manifest: createManifest(routerRef.current.routes),
+        routeModules: createRouteModules(routerRef.current.routes),
       };
     }
 
@@ -121,6 +129,7 @@ function createRouteModules(
       meta: undefined,
       shouldRevalidate: undefined,
     };
+
     return modules;
   }, routeModules || {});
 }

@@ -182,7 +182,14 @@ describe("remix CLI", () => {
 
             $ remix routes
             $ remix routes my-app
-            $ remix routes --json"
+            $ remix routes --json
+
+          Reveal the used entry point:
+
+            $ remix reveal entry.client
+            $ remix reveal entry.server
+            $ remix reveal entry.client --no-typescript
+            $ remix reveal entry.server --no-typescript"
       `);
     });
   });
@@ -247,12 +254,6 @@ describe("remix CLI", () => {
       expect(fse.existsSync(path.join(projectDir, "app/root.tsx"))).toBeFalsy();
       expect(
         fse.existsSync(path.join(projectDir, "app/root.jsx"))
-      ).toBeTruthy();
-      expect(
-        fse.existsSync(path.join(projectDir, "tsconfig.json"))
-      ).toBeFalsy();
-      expect(
-        fse.existsSync(path.join(projectDir, "jsconfig.json"))
       ).toBeTruthy();
     });
   });

@@ -1,5 +1,140 @@
 # `@remix-run/react`
 
+## 1.14.3
+
+No significant changes to this package were made in this release. [See the releases page on GitHub](https://github.com/remix-run/remix/releases/tag/remix%401.14.2) for an overview of all changes in v1.14.3.
+
+## 1.14.2
+
+No significant changes to this package were made in this release. [See the releases page on GitHub](https://github.com/remix-run/remix/releases/tag/remix%401.14.2) for an overview of all changes in v1.14.2.
+
+## 1.14.1
+
+### Patch Changes
+
+- Deprecate `useTransition` in favor of `useNavigation` ([#5687](https://github.com/remix-run/remix/pull/5687))
+- Memoize return value of `useMatches` ([#5603](https://github.com/remix-run/remix/pull/5603))
+
+## 1.14.0
+
+### Minor Changes
+
+- Hot Module Replacement and Hot Data Revalidation ([#5259](https://github.com/remix-run/remix/pull/5259))
+  - Requires `unstable_dev` future flag to be enabled
+  - HMR provided through React Refresh
+  - Features:
+    - HMR for component and style changes
+    - HDR when loaders for current route change
+  - Known limitations for MVP:
+    - Only implemented for React via React Refresh
+    - No `import.meta.hot` API exposed yet
+    - Revalidates _all_ loaders on route when loader changes are detected
+    - Loader changes do not account for imported dependencies changing
+
+### Patch Changes
+
+- Remove duplicate manifest imports ([#5534](https://github.com/remix-run/remix/pull/5534))
+- Ensure types for fetchers always include `form*` submission fields ([#5476](https://github.com/remix-run/remix/pull/5476))
+- Sync `FutureConfig` interface between packages ([#5398](https://github.com/remix-run/remix/pull/5398))
+- Updated dependencies:
+  - `@remix-run/router@1.3.3`
+  - `react-router-dom@8.6.2`
+
+## 1.13.0
+
+### Minor Changes
+
+- Add built-in support for PostCSS via the `future.unstable_postcss` feature flag ([#5229](https://github.com/remix-run/remix/pull/5229))
+- Add built-in support for Tailwind via the `future.unstable_tailwind` feature flag ([#5229](https://github.com/remix-run/remix/pull/5229))
+
+### Patch Changes
+
+- Bump React Router dependencies to the latest version. [See the release notes for more details.](https://github.com/remix-run/react-router/releases/tag/react-router%406.8.1) ([#5389](https://github.com/remix-run/remix/pull/5389))
+- Improve efficiency of route manifest-to-tree transformation ([#4748](https://github.com/remix-run/remix/pull/4748))
+- Added better detection for absolute urls in `<Link>` and `<NavLink>` components ([#5390](https://github.com/remix-run/remix/pull/5390))
+
+## 1.12.0
+
+### Minor Changes
+
+- Added a new development server available in the Remix config under the `unstable_dev` flag. [See the release notes](https://github.com/remix-run/remix/releases/tag/remix%401.12.0) for a full description. ([#5133](https://github.com/remix-run/remix/pull/5133))
+- You can now configure the client-side socket timeout via the new `timeoutMs` prop on `<LiveReload />` ([#4036](https://github.com/remix-run/remix/pull/4036))
+
+### Patch Changes
+
+- `<Link to>` can now accept absolute URLs. When the `to` value is an absolute URL, the underlying anchor element will behave as normal, and its URL will not be prefetched. ([#5092](https://github.com/remix-run/remix/pull/5092))
+- Bump React Router dependencies to the latest version. [See the release notes for more details.](https://github.com/remix-run/react-router/releases/tag/react-router%406.8.0) ([#5242](https://github.com/remix-run/remix/pull/5242))
+- Added support for `unstable_useBlocker` and `unstable_usePrompt` from React Router ([#5151](https://github.com/remix-run/remix/pull/5151))
+
+## 1.11.1
+
+No significant changes to this package were made in this release. [See the releases page on GitHub](https://github.com/remix-run/remix/releases/tag/remix%401.11.1) for an overview of all changes in v1.11.1.
+
+## 1.11.0
+
+### Minor Changes
+
+- Added support for [Vanilla Extract](https://vanilla-extract.style) via the `unstable_vanillaExtract` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#5040](https://github.com/remix-run/remix/pull/5040))
+- Add support for CSS side-effect imports via the `unstable_cssSideEffectImports` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#4919](https://github.com/remix-run/remix/pull/4919))
+- Add support for CSS Modules via the `unstable_cssModules` future flag. **IMPORTANT:** Features marked with `unstable` are … unstable. While we're confident in the use cases they solve, the API and implementation may change without a major version bump. ([#4852](https://github.com/remix-run/remix/pull/4852))
+
+### Patch Changes
+
+- Fix v2 `meta` to ensure meta is rendered from the next route in the tree if no `meta` export is included in a leaf route ([#5041](https://github.com/remix-run/remix/pull/5041))
+
+- Ensure `useFetcher` is stable across re-renders in backwards-compatibility layer ([#5118](https://github.com/remix-run/remix/pull/5118))
+
+- Added the `v2_errorBoundary` future flag to opt into the next version of Remix's `ErrorBoundary` behavior. This removes the separate `CatchBoundary` and `ErrorBoundary` and consolidates them into a single `ErrorBoundary`, following the logic used by `errorElement` in React Router. You can then use `isRouteErrorResponse` to differentiate between thrown `Response`/`Error` instances. ([#4918](https://github.com/remix-run/remix/pull/4918))
+
+  ```jsx
+  // Current (Remix v1 default)
+  import { useCatch } from "@remix-run/react";
+
+  export function CatchBoundary() {
+    let caught = useCatch();
+    return (
+      <p>
+        {caught.status} {caught.data}
+      </p>
+    );
+  }
+
+  export function ErrorBoundary({ error }) {
+    return <p>{error.message}</p>;
+  }
+  ```
+
+  ```jsx
+  // Using future.v2_errorBoundary
+  import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
+
+  export function ErrorBoundary() {
+    let error = useRouteError();
+
+    return isRouteErrorResponse(error) ? (
+      <p>
+        {error.status} {error.data}
+      </p>
+    ) : (
+      <p>{error.message}</p>
+    );
+  }
+  ```
+
+- Introduces the `defer()` API from `@remix-run/router` with support for server-rendering and HTTP streaming. This utility allows you to defer values returned from `loader` functions by returning promises instead of resolved values. This has been refered to as _"sending a promise over the wire"_. ([#4920](https://github.com/remix-run/remix/pull/4920))
+
+  Informational Resources:
+
+  - <https://gist.github.com/jacob-ebey/9bde9546c1aafaa6bc8c242054b1be26>
+  - <https://github.com/remix-run/remix/blob/main/decisions/0004-streaming-apis.md>
+
+  Documentation Resources (better docs specific to Remix are in the works):
+
+  - <https://reactrouter.com/en/main/utils/defer>
+  - <https://reactrouter.com/en/main/components/await>
+  - <https://reactrouter.com/en/main/hooks/use-async-value>
+  - <https://reactrouter.com/en/main/hooks/use-async-error>
+
 ## 1.10.1
 
 ### Patch Changes

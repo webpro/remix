@@ -15,6 +15,7 @@ test.describe("meta", () => {
 
   test.beforeAll(async () => {
     fixture = await createFixture({
+      future: { v2_routeConvention: true },
       files: {
         "app/root.jsx": js`
           import { json } from "@remix-run/node";
@@ -54,7 +55,7 @@ test.describe("meta", () => {
           }
         `,
 
-        "app/routes/index.jsx": js`
+        "app/routes/_index.jsx": js`
           export default function Index() {
             return <div>This is the index file</div>;
           }
@@ -180,7 +181,7 @@ test.describe("meta", () => {
           }
         `,
 
-        "app/routes/blog/index.jsx": js`
+        "app/routes/blog._index.jsx": js`
           import { Link, useLoaderData } from "@remix-run/react";
           import { json } from "@remix-run/node";
 
@@ -212,7 +213,7 @@ test.describe("meta", () => {
           }
         `,
 
-        "app/routes/blog/$pid.jsx": js`
+        "app/routes/blog.$pid.jsx": js`
           import { useLoaderData } from "@remix-run/react";
           import { json } from "@remix-run/node";
 
@@ -402,6 +403,7 @@ test.describe("v2_meta", () => {
             ignoredRouteFiles: ["**/.*"],
             future: {
               v2_meta: true,
+              v2_routeConvention: true,
             },
           };
         `,
@@ -440,7 +442,7 @@ test.describe("v2_meta", () => {
           }
         `,
 
-        "app/routes/index.jsx": js`
+        "app/routes/_index.jsx": js`
           export const meta = ({ data, matches }) => [
             ...matches.map((match) => match.meta),
           ];
@@ -449,8 +451,15 @@ test.describe("v2_meta", () => {
           }
         `,
 
-        "app/routes/no-meta.jsx": js`
-          export default function NoMeta() {
+        "app/routes/no-meta-export.jsx": js`
+          export default function NoMetaExport() {
+            return <div>Parent meta here!</div>;
+          }
+        `,
+
+        "app/routes/empty-meta-function.jsx": js`
+          export const meta = () => [];
+          export default function EmptyMetaFunction() {
             return <div>No meta here!</div>;
           }
         `,
@@ -481,9 +490,17 @@ test.describe("v2_meta", () => {
     appFixture.close();
   });
 
-  test("empty meta does not render a tag", async ({ page }) => {
+  test("no meta export renders meta from nearest route meta in the tree", async ({
+    page,
+  }) => {
     let app = new PlaywrightFixture(appFixture, page);
-    await app.goto("/no-meta");
+    await app.goto("/no-meta-export");
+    expect(await app.getHtml('meta[name="description"]')).toBeTruthy();
+  });
+
+  test("empty meta array does not render a tag", async ({ page }) => {
+    let app = new PlaywrightFixture(appFixture, page);
+    await app.goto("/empty-meta-function");
     await expect(app.getHtml("title")).rejects.toThrowError(
       'No element matches selector "title"'
     );

@@ -31,7 +31,7 @@ export type {
   PageLinkDescriptor,
 } from "./links";
 
-export type { TypedResponse } from "./responses";
+export type { TypedDeferredData, TypedResponse } from "./responses";
 
 export type {
   ActionArgs,
@@ -60,4 +60,5 @@ export type {
   SessionData,
   SessionIdStorageStrategy,
   SessionStorage,
+  FlashSessionData,
 } from "./sessions";

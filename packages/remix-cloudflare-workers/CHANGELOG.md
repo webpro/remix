@@ -1,5 +1,62 @@
 # `@remix-run/cloudflare-workers`
 
+## 1.14.3
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.14.3`
+
+## 1.14.2
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.14.2`
+
+## 1.14.1
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.14.1`
+
+## 1.14.0
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.14.0`
+
+## 1.13.0
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.13.0`
+
+## 1.12.0
+
+### Patch Changes
+
+- Updated `RequestHandler` type to match other adapter types ([#4884](https://github.com/remix-run/remix/pull/4884))
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.12.0`
+
+## 1.11.1
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.11.1`
+
+## 1.11.0
+
+### Patch Changes
+
+- Updated dependencies:
+  - `@remix-run/cloudflare@1.11.0`
+
 ## 1.10.1
 
 ### Patch Changes
